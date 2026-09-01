@@ -1,0 +1,185 @@
+from sqlalchemy.orm import Session
+
+from app.models.lead import Lead
+
+
+# ============================================================
+# CALCULATE LEAD SCORE
+# ============================================================
+
+def calculate_lead_score(
+    lead: Lead
+) -> int:
+
+    score = 0
+
+    # --------------------------------------------------------
+    # CORE QUALIFICATION INFORMATION
+    # --------------------------------------------------------
+
+    if lead.budget:
+        score += 10
+
+    if lead.location:
+        score += 10
+
+    if lead.property_type:
+        score += 10
+
+    if lead.purpose:
+        score += 10
+
+    if lead.timeline:
+        score += 10
+
+    # --------------------------------------------------------
+    # BUYING INTENT
+    # --------------------------------------------------------
+
+    if lead.buying_intent:
+
+        intent = (
+            lead.buying_intent
+            .strip()
+            .lower()
+        )
+
+        if intent == "high":
+            score += 20
+
+        elif intent == "medium":
+            score += 10
+
+        elif intent == "low":
+            score += 5
+
+    # --------------------------------------------------------
+    # QUALIFICATION / SALES STATUS
+    # --------------------------------------------------------
+
+    if lead.qualification_status:
+
+        status = (
+            lead.qualification_status
+            .strip()
+            .lower()
+        )
+
+        if status == "qualified":
+            score += 15
+
+        elif status == "contacted":
+            score += 5
+
+        elif status == "property_interest":
+            score += 10
+
+        elif status == "site_visit":
+            score += 20
+
+        elif status == "negotiation":
+            score += 25
+
+        elif status == "converted":
+            score += 30
+
+    # --------------------------------------------------------
+    # CAP SCORE
+    # --------------------------------------------------------
+
+    return min(
+        score,
+        100
+    )
+
+
+# ============================================================
+# DETERMINE PIPELINE STAGE
+# ============================================================
+
+def determine_pipeline_stage(
+    lead: Lead
+) -> str:
+
+    status = (
+        lead.qualification_status
+        or ""
+    ).strip().lower()
+
+    # --------------------------------------------------------
+    # CONVERTED
+    # --------------------------------------------------------
+
+    if status == "converted":
+        return "CONVERTED"
+
+    # --------------------------------------------------------
+    # NEGOTIATION
+    # --------------------------------------------------------
+
+    if status == "negotiation":
+        return "NEGOTIATION"
+
+    # --------------------------------------------------------
+    # SITE VISIT
+    # --------------------------------------------------------
+
+    if status == "site_visit":
+        return "SITE_VISIT"
+
+    # --------------------------------------------------------
+    # PROPERTY INTEREST
+    # --------------------------------------------------------
+
+    if status == "property_interest":
+        return "PROPERTY_INTEREST"
+
+    # --------------------------------------------------------
+    # QUALIFIED
+    # --------------------------------------------------------
+
+    if status == "qualified":
+        return "QUALIFIED"
+
+    # --------------------------------------------------------
+    # CONTACTED
+    # --------------------------------------------------------
+
+    if status == "contacted":
+        return "CONTACTED"
+
+    # --------------------------------------------------------
+    # DEFAULT
+    # --------------------------------------------------------
+
+    return "NEW"
+
+
+# ============================================================
+# UPDATE LEAD SCORE AND PIPELINE
+# ============================================================
+
+def update_lead_score(
+    db: Session,
+    lead: Lead
+):
+
+    lead.lead_score = (
+        calculate_lead_score(
+            lead
+        )
+    )
+
+    lead.pipeline_stage = (
+        determine_pipeline_stage(
+            lead
+        )
+    )
+
+    db.commit()
+
+    db.refresh(
+        lead
+    )
+
+    return lead

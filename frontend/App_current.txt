@@ -1,0 +1,3291 @@
+import { useEffect, useState } from "react";
+import "./App.css";
+
+const API_BASE_URL = "http://127.0.0.1:8000";
+
+function App() {
+  const [summary, setSummary] = useState(null);
+  const [hotLeads, setHotLeads] = useState([]);
+  const [pipeline, setPipeline] = useState({});
+
+  const [leads, setLeads] = useState([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState("");
+  const [leadSearch, setLeadSearch] = useState("");
+  const [leadStageFilter, setLeadStageFilter] = useState("ALL");
+  const [activeView, setActiveView] = useState("dashboard");
+
+  const [properties, setProperties] = useState([]);
+  const [propertiesLoading, setPropertiesLoading] = useState(false);
+  const [propertiesError, setPropertiesError] = useState("");
+  const [propertySearch, setPropertySearch] = useState("");
+  const [propertyTypeFilter, setPropertyTypeFilter] = useState("ALL");
+  const [propertyAvailabilityFilter, setPropertyAvailabilityFilter] = useState("ALL");
+  const [propertyMaxPrice, setPropertyMaxPrice] = useState("");
+
+  const [siteVisits, setSiteVisits] = useState([]);
+  const [siteVisitsLoading, setSiteVisitsLoading] = useState(false);
+  const [siteVisitsError, setSiteVisitsError] = useState("");
+  const [updatingSiteVisitId, setUpdatingSiteVisitId] = useState(null);
+  const [siteVisitActionError, setSiteVisitActionError] = useState("");
+
+  const [followUps, setFollowUps] = useState([]);
+  const [followUpsLoading, setFollowUpsLoading] = useState(false);
+  const [followUpsError, setFollowUpsError] = useState("");
+  const [updatingFollowUpId, setUpdatingFollowUpId] = useState(null);
+  const [followUpActionError, setFollowUpActionError] = useState("");
+
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityStatusFilter, setActivityStatusFilter] = useState("ALL");
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [showAddLead, setShowAddLead] = useState(false);
+
+  const [newLead, setNewLead] = useState({
+    name: "",
+    phone: "",
+    requirement: "",
+  });
+
+  const [creatingLead, setCreatingLead] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
+
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [leadDetailsLoading, setLeadDetailsLoading] = useState(false);
+
+  const [conversations, setConversations] = useState([]);
+  const [chatMessage, setChatMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [chatError, setChatError] = useState("");
+
+  // Lead activity timeline
+  const [leadActivities, setLeadActivities] = useState([]);
+  const [leadActivitiesLoading, setLeadActivitiesLoading] = useState(false);
+  const [leadActivitiesError, setLeadActivitiesError] = useState("");
+
+  // Next Best Action
+  const [nextBestAction, setNextBestAction] = useState(null);
+  const [nextBestActionLoading, setNextBestActionLoading] = useState(false);
+  const [nextBestActionError, setNextBestActionError] = useState("");
+
+  // Lead Health & Priority
+  const [leadHealth, setLeadHealth] = useState(null);
+  const [leadHealthLoading, setLeadHealthLoading] = useState(false);
+  const [leadHealthError, setLeadHealthError] = useState("");
+
+  const [showFollowUp, setShowFollowUp] = useState(false);
+
+  const [followUpForm, setFollowUpForm] = useState({
+    follow_up_date: "",
+    message: "",
+    notes: "",
+  });
+
+  const [schedulingFollowUp, setSchedulingFollowUp] = useState(false);
+  const [followUpError, setFollowUpError] = useState("");
+  const [followUpSuccess, setFollowUpSuccess] = useState("");
+
+  const pipelineStages = [
+    "NEW",
+    "CONTACTED",
+    "QUALIFIED",
+    "PROPERTY_INTEREST",
+    "SITE_VISIT",
+    "NEGOTIATION",
+    "CONVERTED",
+  ];
+
+  // ==========================================================
+  // LOAD DASHBOARD
+  // ==========================================================
+
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const [
+        summaryResponse,
+        hotLeadsResponse,
+        pipelineResponse,
+      ] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/dashboard/summary`),
+        fetch(`${API_BASE_URL}/api/dashboard/hot-leads`),
+        fetch(`${API_BASE_URL}/api/dashboard/pipeline`),
+      ]);
+
+      if (
+        !summaryResponse.ok ||
+        !hotLeadsResponse.ok ||
+        !pipelineResponse.ok
+      ) {
+        throw new Error("Failed to load dashboard data.");
+      }
+
+      const summaryData = await summaryResponse.json();
+      const hotLeadsData = await hotLeadsResponse.json();
+      const pipelineData = await pipelineResponse.json();
+
+      setSummary(summaryData);
+      setHotLeads(hotLeadsData.leads || []);
+      setPipeline(pipelineData.pipeline || {});
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        "Unable to connect to the AI Sales Agent backend. Make sure FastAPI is running on port 8000."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboard();
+    loadLeads();
+  }, []);
+
+
+  // ==========================================================
+  // LOAD ALL LEADS
+  // ==========================================================
+
+  const loadLeads = async () => {
+    try {
+      setLeadsLoading(true);
+      setLeadsError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/leads/`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load leads."
+        );
+      }
+
+      setLeads(data.leads || []);
+    } catch (err) {
+      console.error(err);
+
+      setLeadsError(
+        err.message || "Unable to load leads."
+      );
+    } finally {
+      setLeadsLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // LOAD ALL PROPERTIES
+  // ==========================================================
+
+  const loadProperties = async () => {
+    try {
+      setPropertiesLoading(true);
+      setPropertiesError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/properties/`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load properties."
+        );
+      }
+
+      setProperties(data.properties || []);
+    } catch (err) {
+      console.error(err);
+      setPropertiesError(
+        err.message || "Unable to load properties."
+      );
+    } finally {
+      setPropertiesLoading(false);
+    }
+  };
+
+
+  // ==========================================================
+  // LOAD SITE VISITS
+  // ==========================================================
+
+  const loadSiteVisits = async () => {
+    try {
+      setSiteVisitsLoading(true);
+      setSiteVisitsError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/activity/site-visits`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load site visits."
+        );
+      }
+
+      setSiteVisits(data.site_visits || []);
+    } catch (err) {
+      console.error(err);
+      setSiteVisitsError(
+        err.message || "Unable to load site visits."
+      );
+    } finally {
+      setSiteVisitsLoading(false);
+    }
+  };
+
+
+  // ==========================================================
+  // COMPLETE SITE VISIT
+  // ==========================================================
+
+  const handleCompleteSiteVisit = async (visitId) => {
+    if (!visitId || updatingSiteVisitId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Mark this site visit as completed?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setUpdatingSiteVisitId(visitId);
+      setSiteVisitActionError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/site-visits/${visitId}/complete`,
+        {
+          method: "PATCH",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to complete site visit."
+        );
+      }
+
+      await loadSiteVisits();
+      await loadDashboard();
+      await loadLeads();
+      await loadNextBestAction(selectedLead.id);
+    } catch (err) {
+      console.error(err);
+      setSiteVisitActionError(
+        err.message || "Unable to complete site visit."
+      );
+    } finally {
+      setUpdatingSiteVisitId(null);
+    }
+  };
+
+
+  // ==========================================================
+  // LOAD FOLLOW-UPS
+  // ==========================================================
+
+  const loadFollowUps = async () => {
+    try {
+      setFollowUpsLoading(true);
+      setFollowUpsError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/activity/follow-ups`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load follow-ups."
+        );
+      }
+
+      setFollowUps(data.follow_ups || []);
+    } catch (err) {
+      console.error(err);
+      setFollowUpsError(
+        err.message || "Unable to load follow-ups."
+      );
+    } finally {
+      setFollowUpsLoading(false);
+    }
+  };
+
+
+  // ==========================================================
+  // COMPLETE FOLLOW-UP
+  // ==========================================================
+
+  const handleCompleteFollowUp = async (followUpId) => {
+    if (!followUpId || updatingFollowUpId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Mark this follow-up as completed?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setUpdatingFollowUpId(followUpId);
+      setFollowUpActionError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/follow-ups/${followUpId}/complete`,
+        {
+          method: "PATCH",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to complete follow-up."
+        );
+      }
+
+      await loadFollowUps();
+      await loadDashboard();
+      await loadLeads();
+
+      if (selectedLead) {
+        await loadLeadActivities(selectedLead.id);
+      }
+    } catch (err) {
+      console.error(err);
+      setFollowUpActionError(
+        err.message || "Unable to complete follow-up."
+      );
+    } finally {
+      setUpdatingFollowUpId(null);
+    }
+  };
+
+
+  // ==========================================================
+  // CANCEL FOLLOW-UP
+  // ==========================================================
+
+  const handleCancelFollowUp = async (followUpId) => {
+    if (!followUpId || updatingFollowUpId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel this follow-up?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setUpdatingFollowUpId(followUpId);
+      setFollowUpActionError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/follow-ups/${followUpId}/cancel`,
+        {
+          method: "PATCH",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to cancel follow-up."
+        );
+      }
+
+      await loadFollowUps();
+      await loadDashboard();
+      await loadLeads();
+
+      if (selectedLead) {
+        await loadLeadActivities(selectedLead.id);
+      }
+    } catch (err) {
+      console.error(err);
+      setFollowUpActionError(
+        err.message || "Unable to cancel follow-up."
+      );
+    } finally {
+      setUpdatingFollowUpId(null);
+    }
+  };
+
+  // ==========================================================
+  // ADD NEW LEAD
+  // ==========================================================
+
+  const handleCreateLead = async (event) => {
+    event.preventDefault();
+
+    setFormError("");
+    setFormSuccess("");
+
+    if (!newLead.name.trim()) {
+      setFormError("Please enter the lead name.");
+      return;
+    }
+
+    if (!newLead.phone.trim()) {
+      setFormError("Please enter the phone number.");
+      return;
+    }
+
+    if (!newLead.requirement.trim()) {
+      setFormError("Please enter the lead requirement.");
+      return;
+    }
+
+    try {
+      setCreatingLead(true);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/leads/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: newLead.name.trim(),
+            phone: newLead.phone.trim(),
+            requirement: newLead.requirement.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to create lead."
+        );
+      }
+
+      setFormSuccess(
+        `Lead #${data.lead.id} created successfully.`
+      );
+
+      setNewLead({
+        name: "",
+        phone: "",
+        requirement: "",
+      });
+
+      await loadDashboard();
+      await loadLeads();
+
+      setTimeout(() => {
+        setShowAddLead(false);
+        setFormSuccess("");
+      }, 1200);
+    } catch (err) {
+      console.error(err);
+
+      setFormError(
+        err.message || "Unable to create lead."
+      );
+    } finally {
+      setCreatingLead(false);
+    }
+  };
+
+  // ==========================================================
+  // LOAD LEAD ACTIVITY TIMELINE
+  // ==========================================================
+
+  const loadLeadActivities = async (leadId) => {
+    try {
+      setLeadActivitiesLoading(true);
+      setLeadActivitiesError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/activity/lead/${leadId}`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load lead activity."
+        );
+      }
+
+      setLeadActivities(data.activities || []);
+    } catch (err) {
+      console.error(err);
+      setLeadActivitiesError(
+        err.message || "Unable to load lead activity."
+      );
+      setLeadActivities([]);
+    } finally {
+      setLeadActivitiesLoading(false);
+    }
+  };
+
+
+  // ==========================================================
+  // LOAD NEXT BEST ACTION
+  // ==========================================================
+
+  const loadNextBestAction = async (leadId) => {
+    if (!leadId) {
+      return;
+    }
+
+    try {
+      setNextBestActionLoading(true);
+      setNextBestActionError("");
+    setLeadHealth(null);
+    setLeadHealthError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/leads/${leadId}/next-best-action`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load next best action."
+        );
+      }
+
+      setNextBestAction(data);
+    } catch (err) {
+      console.error(err);
+      setNextBestAction(null);
+      setNextBestActionError(
+        err.message || "Unable to load next best action."
+      );
+    } finally {
+      setNextBestActionLoading(false);
+    }
+  };
+
+
+  // ==========================================================
+  // LOAD LEAD HEALTH & PRIORITY
+  // ==========================================================
+
+  const loadLeadHealth = async (leadId) => {
+    if (!leadId) {
+      return;
+    }
+
+    try {
+      setLeadHealthLoading(true);
+      setLeadHealthError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/leads/${leadId}/health`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to load lead health."
+        );
+      }
+
+      setLeadHealth(data);
+    } catch (err) {
+      console.error(err);
+      setLeadHealth(null);
+      setLeadHealthError(
+        err.message || "Unable to load lead health."
+      );
+    } finally {
+      setLeadHealthLoading(false);
+    }
+  };
+
+
+  // ==========================================================
+  // OPEN LEAD
+  // ==========================================================
+
+  const openLead = async (lead) => {
+    setSelectedLead(lead);
+
+    setConversations([]);
+    setLeadActivities([]);
+    setChatMessage("");
+    setChatError("");
+    setLeadActivitiesError("");
+    setNextBestAction(null);
+    setNextBestActionError("");
+
+    setLeadDetailsLoading(true);
+
+    try {
+      const [conversationResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/chat/${lead.id}`),
+        loadLeadActivities(lead.id),
+        loadNextBestAction(lead.id),
+        loadLeadHealth(lead.id),
+      ]);
+
+      if (!conversationResponse.ok) {
+        throw new Error(
+          "Unable to load conversation history."
+        );
+      }
+
+      const data = await conversationResponse.json();
+
+      setConversations(
+        data.conversations || []
+      );
+    } catch (err) {
+      console.error(err);
+
+      setChatError(
+        err.message ||
+          "Unable to load conversation history."
+      );
+    } finally {
+      setLeadDetailsLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // CLOSE LEAD
+  // ==========================================================
+
+  const closeLead = () => {
+    setSelectedLead(null);
+    setConversations([]);
+    setLeadActivities([]);
+    setLeadActivitiesError("");
+    setChatMessage("");
+    setChatError("");
+    setNextBestAction(null);
+    setNextBestActionError("");
+    setShowFollowUp(false);
+  };
+
+  // ==========================================================
+  // SEND CHAT MESSAGE
+  // ==========================================================
+
+  const handleSendMessage = async (event) => {
+    event?.preventDefault();
+
+    const message = chatMessage.trim();
+
+    if (!message || !selectedLead || sendingMessage) {
+      return;
+    }
+
+    setChatError("");
+    setSendingMessage(true);
+
+    const temporaryUserMessage = {
+      role: "user",
+      message,
+      created_at: new Date().toISOString(),
+    };
+
+    setConversations((previous) => [
+      ...previous,
+      temporaryUserMessage,
+    ]);
+
+    setChatMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            lead_id: selectedLead.id,
+            message,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "AI response failed."
+        );
+      }
+
+      const assistantMessage = {
+        role: "assistant",
+        message: data.response,
+        created_at: new Date().toISOString(),
+      };
+
+      setConversations((previous) => [
+        ...previous,
+        assistantMessage,
+      ]);
+
+      if (data.lead) {
+        setSelectedLead((previous) => ({
+          ...previous,
+          ...data.lead,
+        }));
+      }
+
+      await loadDashboard();
+      await loadLeads();
+    } catch (err) {
+      console.error(err);
+
+      setConversations((previous) =>
+        previous.filter(
+          (conversation) =>
+            conversation !== temporaryUserMessage
+        )
+      );
+
+      setChatMessage(message);
+
+      setChatError(
+        err.message ||
+          "Unable to get a response from the AI agent."
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // ==========================================================
+  // SCHEDULE FOLLOW-UP
+  // ==========================================================
+
+  const handleScheduleFollowUp = async (event) => {
+    event.preventDefault();
+
+    if (!selectedLead) {
+      return;
+    }
+
+    setFollowUpError("");
+    setFollowUpSuccess("");
+
+    if (!followUpForm.follow_up_date) {
+      setFollowUpError(
+        "Please select a follow-up date and time."
+      );
+      return;
+    }
+
+    try {
+      setSchedulingFollowUp(true);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/follow-ups`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            lead_id: selectedLead.id,
+            follow_up_date:
+              followUpForm.follow_up_date,
+            message:
+              followUpForm.message.trim() || null,
+            notes:
+              followUpForm.notes.trim() || null,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "Unable to schedule follow-up."
+        );
+      }
+
+      setFollowUpSuccess(
+        "Follow-up scheduled successfully."
+      );
+
+      setFollowUpForm({
+        follow_up_date: "",
+        message: "",
+        notes: "",
+      });
+
+      await loadDashboard();
+
+      setTimeout(() => {
+        setShowFollowUp(false);
+        setFollowUpSuccess("");
+      }, 1200);
+    } catch (err) {
+      console.error(err);
+
+      setFollowUpError(
+        err.message ||
+          "Unable to schedule follow-up."
+      );
+    } finally {
+      setSchedulingFollowUp(false);
+    }
+  };
+
+  // ==========================================================
+  // FORMAT DATE
+  // ==========================================================
+
+  const formatDate = (dateString) => {
+    if (!dateString) {
+      return "";
+    }
+
+    try {
+      return new Date(dateString).toLocaleString();
+    } catch {
+      return dateString;
+    }
+  };
+
+  const activityIcon = (type) => {
+    const icons = {
+      lead_created: "＋",
+      follow_up: "↗",
+      communication: "✉",
+      site_visit: "⌖",
+    };
+
+    return icons[type] || "•";
+  };
+
+  const activityLabel = (type) => {
+    const labels = {
+      lead_created: "Lead Created",
+      follow_up: "Follow-up",
+      communication: "Communication",
+      site_visit: "Site Visit",
+    };
+
+    return labels[type] || "Activity";
+  };
+
+
+  // ==========================================================
+  // FILTER CRM LEADS
+  // ==========================================================
+
+  const filteredLeads = leads.filter((lead) => {
+    const search = leadSearch.trim().toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      String(lead.name || "").toLowerCase().includes(search) ||
+      String(lead.phone || "").toLowerCase().includes(search) ||
+      String(lead.location || "").toLowerCase().includes(search) ||
+      String(lead.property_type || "").toLowerCase().includes(search);
+
+    const matchesStage =
+      leadStageFilter === "ALL" ||
+      lead.pipeline_stage === leadStageFilter;
+
+    return matchesSearch && matchesStage;
+  });
+
+  // ==========================================================
+  // FILTER CRM PROPERTIES
+  // ==========================================================
+
+  const propertyTypes = [
+    ...new Set(
+      properties
+        .map((property) => property.property_type)
+        .filter(Boolean)
+    ),
+  ];
+
+  const parsePropertyPriceInLakhs = (price) => {
+    if (!price) return null;
+
+    const normalized = String(price)
+      .toLowerCase()
+      .replace(/,/g, "")
+      .replace(/₹/g, "")
+      .trim();
+
+    const number = parseFloat(normalized);
+
+    if (Number.isNaN(number)) return null;
+
+    if (normalized.includes("crore")) {
+      return number * 100;
+    }
+
+    if (normalized.includes("lakh")) {
+      return number;
+    }
+
+    return number;
+  };
+
+  const filteredProperties = properties.filter((property) => {
+    const search = propertySearch.trim().toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      String(property.title || "").toLowerCase().includes(search) ||
+      String(property.location || "").toLowerCase().includes(search) ||
+      String(property.property_type || "").toLowerCase().includes(search);
+
+    const matchesType =
+      propertyTypeFilter === "ALL" ||
+      property.property_type === propertyTypeFilter;
+
+    const matchesAvailability =
+      propertyAvailabilityFilter === "ALL" ||
+      (propertyAvailabilityFilter === "AVAILABLE" && property.available === true) ||
+      (propertyAvailabilityFilter === "UNAVAILABLE" && property.available === false);
+
+    const numericMaxPrice = propertyMaxPrice
+      ? Number(propertyMaxPrice)
+      : null;
+
+    const propertyPrice = parsePropertyPriceInLakhs(property.price);
+
+    const matchesPrice =
+      !numericMaxPrice ||
+      propertyPrice === null ||
+      propertyPrice <= numericMaxPrice;
+
+    return (
+      matchesSearch &&
+      matchesType &&
+      matchesAvailability &&
+      matchesPrice
+    );
+  });
+
+
+  // ==========================================================
+  // FILTER SITE VISITS
+  // ==========================================================
+
+  const filteredSiteVisits = siteVisits.filter((visit) => {
+    const search = activitySearch.trim().toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      String(visit.lead_name || "").toLowerCase().includes(search) ||
+      String(visit.property_title || "").toLowerCase().includes(search) ||
+      String(visit.property_location || "").toLowerCase().includes(search);
+
+    const matchesStatus =
+      activityStatusFilter === "ALL" ||
+      String(visit.status || "").toUpperCase() ===
+        activityStatusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+
+  // ==========================================================
+  // FILTER FOLLOW-UPS
+  // ==========================================================
+
+  const filteredFollowUps = followUps.filter((followUp) => {
+    const search = activitySearch.trim().toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      String(followUp.lead_name || "").toLowerCase().includes(search) ||
+      String(followUp.message || "").toLowerCase().includes(search) ||
+      String(followUp.notes || "").toLowerCase().includes(search);
+
+    const matchesStatus =
+      activityStatusFilter === "ALL" ||
+      String(followUp.status || "").toUpperCase() ===
+        activityStatusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
+
+  return (
+    <div className="app">
+
+      {/* ====================================================
+          TOP BAR
+          ==================================================== */}
+
+      <header className="topbar">
+
+        <div>
+          <h1>AI Sales Agent</h1>
+
+          <p>
+            Real Estate CRM Dashboard
+          </p>
+        </div>
+
+        <div className="topbar-nav">
+          <button
+            className={`nav-button ${
+              activeView === "dashboard" ? "active" : ""
+            }`}
+            onClick={() => setActiveView("dashboard")}
+          >
+            Dashboard
+          </button>
+
+          <button
+            className={`nav-button ${
+              activeView === "leads" ? "active" : ""
+            }`}
+            onClick={() => {
+              setActiveView("leads");
+              loadLeads();
+            }}
+          >
+            Leads
+          </button>
+
+          <button
+            className={`nav-button ${
+              activeView === "properties" ? "active" : ""
+            }`}
+            onClick={() => {
+              setActiveView("properties");
+              loadProperties();
+            }}
+          >
+            Properties
+          </button>
+
+          <button
+            className={`nav-button ${
+              activeView === "site_visits" ? "active" : ""
+            }`}
+            onClick={() => {
+              setActiveView("site_visits");
+              setSiteVisitActionError("");
+              loadSiteVisits();
+            }}
+          >
+            Site Visits
+          </button>
+
+          <button
+            className={`nav-button ${
+              activeView === "follow_ups" ? "active" : ""
+            }`}
+            onClick={() => {
+              setActiveView("follow_ups");
+              setFollowUpActionError("");
+              loadFollowUps();
+            }}
+          >
+            Follow-ups
+          </button>
+        </div>
+
+        <div className="topbar-actions">
+
+          <button
+            className="refresh-button"
+            onClick={loadDashboard}
+            disabled={loading}
+          >
+            Refresh
+          </button>
+
+          <button
+            className="add-lead-button"
+            onClick={() => {
+              setFormError("");
+              setFormSuccess("");
+              setShowAddLead(true);
+            }}
+          >
+            + Add New Lead
+          </button>
+
+        </div>
+
+      </header>
+
+
+      {/* ====================================================
+          MAIN DASHBOARD
+          ==================================================== */}
+
+      <main className="dashboard">
+
+        {activeView === "site_visits" ? (
+          <section className="panel activity-panel">
+            <div className="panel-header crm-panel-header">
+              <div>
+                <h2>Site Visits</h2>
+                <p>Manage scheduled property visits across your sales pipeline.</p>
+              </div>
+
+              <button
+                className="refresh-button"
+                onClick={loadSiteVisits}
+                disabled={siteVisitsLoading}
+              >
+                {siteVisitsLoading ? "Loading..." : "Refresh Visits"}
+              </button>
+            </div>
+
+            <div className="crm-toolbar activity-toolbar">
+              <input
+                className="crm-search"
+                type="text"
+                value={activitySearch}
+                onChange={(event) => setActivitySearch(event.target.value)}
+                placeholder="Search lead or property..."
+              />
+
+              <select
+                className="crm-filter"
+                value={activityStatusFilter}
+                onChange={(event) =>
+                  setActivityStatusFilter(event.target.value)
+                }
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="SCHEDULED">Scheduled</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+
+            {siteVisitsError && (
+              <div className="error-card crm-error">
+                {siteVisitsError}
+              </div>
+            )}
+
+            {siteVisitActionError && (
+              <div className="error-card crm-error">
+                {siteVisitActionError}
+              </div>
+            )}
+
+            {siteVisitsLoading ? (
+              <div className="loading-card crm-loading">
+                Loading site visits...
+              </div>
+            ) : filteredSiteVisits.length === 0 ? (
+              <div className="empty-state crm-empty">
+                No site visits match your current filters.
+              </div>
+            ) : (
+              <div className="activity-list">
+                {filteredSiteVisits.map((visit) => (
+                  <article className="activity-card" key={visit.id}>
+                    <div className="activity-card-main">
+                      <div>
+                        <div className="activity-eyebrow">
+                          Site Visit #{visit.id}
+                        </div>
+                        <h3>{visit.lead_name || `Lead #${visit.lead_id}`}</h3>
+                        <p className="activity-property">
+                          {visit.property_title || "Property unavailable"}
+                        </p>
+                        <p className="activity-location">
+                          {visit.property_location || "Location unavailable"}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`activity-status ${
+                          String(visit.status || "").toLowerCase()
+                        }`}
+                      >
+                        {visit.status || "Unknown"}
+                      </span>
+                    </div>
+
+                    <div className="activity-details">
+                      <div>
+                        <span>Date & Time</span>
+                        <strong>{formatDate(visit.visit_date)}</strong>
+                      </div>
+
+                      <div>
+                        <span>Property Type</span>
+                        <strong>{visit.property_type || "—"}</strong>
+                      </div>
+
+                      <div>
+                        <span>Price</span>
+                        <strong>{visit.property_price || "—"}</strong>
+                      </div>
+                    </div>
+
+                    {visit.notes && (
+                      <div className="activity-notes">
+                        <strong>Notes</strong>
+                        <p>{visit.notes}</p>
+                      </div>
+                    )}
+
+                    {String(visit.status || "").toLowerCase() === "scheduled" && (
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="submit-lead-button"
+                          onClick={() =>
+                            handleCompleteSiteVisit(visit.id)
+                          }
+                          disabled={updatingSiteVisitId === visit.id}
+                        >
+                          {updatingSiteVisitId === visit.id
+                            ? "Completing..."
+                            : "Mark Completed"}
+                        </button>
+
+                        <button
+  type="button"
+  className="cancel-button"
+  onClick={async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel this site visit?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setUpdatingSiteVisitId(visit.id);
+      setSiteVisitActionError("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/site-visits/${visit.id}/cancel`,
+        {
+          method: "PATCH",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Unable to cancel site visit."
+        );
+      }
+
+      await loadSiteVisits();
+      await loadDashboard();
+      await loadLeads();
+
+    } catch (err) {
+      console.error(err);
+
+      setSiteVisitActionError(
+        err.message || "Unable to cancel site visit."
+      );
+
+    } finally {
+      setUpdatingSiteVisitId(null);
+    }
+  }}
+  disabled={updatingSiteVisitId === visit.id}
+>
+  {updatingSiteVisitId === visit.id
+    ? "Cancelling..."
+    : "Cancel Visit"}
+</button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : activeView === "follow_ups" ? (
+          <section className="panel activity-panel">
+            <div className="panel-header crm-panel-header">
+              <div>
+                <h2>Follow-ups</h2>
+                <p>Track pending and completed customer follow-ups.</p>
+              </div>
+
+              <button
+                className="refresh-button"
+                onClick={loadFollowUps}
+                disabled={followUpsLoading}
+              >
+                {followUpsLoading ? "Loading..." : "Refresh Follow-ups"}
+              </button>
+            </div>
+
+            <div className="crm-toolbar activity-toolbar">
+              <input
+                className="crm-search"
+                type="text"
+                value={activitySearch}
+                onChange={(event) => setActivitySearch(event.target.value)}
+                placeholder="Search lead or follow-up message..."
+              />
+
+              <select
+                className="crm-filter"
+                value={activityStatusFilter}
+                onChange={(event) =>
+                  setActivityStatusFilter(event.target.value)
+                }
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="PENDING">Pending</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="FAILED">Failed</option>
+              </select>
+            </div>
+
+            {followUpsError && (
+              <div className="error-card crm-error">
+                {followUpsError}
+              </div>
+            )}
+
+            {followUpActionError && (
+              <div className="error-card crm-error">
+                {followUpActionError}
+              </div>
+            )}
+
+            {followUpsLoading ? (
+              <div className="loading-card crm-loading">
+                Loading follow-ups...
+              </div>
+            ) : filteredFollowUps.length === 0 ? (
+              <div className="empty-state crm-empty">
+                No follow-ups match your current filters.
+              </div>
+            ) : (
+              <div className="activity-list">
+                {filteredFollowUps.map((followUp) => (
+                  <article className="activity-card" key={followUp.id}>
+                    <div className="activity-card-main">
+                      <div>
+                        <div className="activity-eyebrow">
+                          Follow-up #{followUp.id}
+                        </div>
+                        <h3>
+                          {followUp.lead_name ||
+                            `Lead #${followUp.lead_id}`}
+                        </h3>
+                        <p className="activity-property">
+                          {followUp.message || "No message"}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`activity-status ${
+                          String(followUp.status || "").toLowerCase()
+                        }`}
+                      >
+                        {followUp.status || "Unknown"}
+                      </span>
+                    </div>
+
+                    <div className="activity-details">
+                      <div>
+                        <span>Scheduled For</span>
+                        <strong>
+                          {formatDate(followUp.follow_up_date)}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>Lead ID</span>
+                        <strong>#{followUp.lead_id}</strong>
+                      </div>
+
+                      <div>
+                        <span>Created</span>
+                        <strong>
+                          {formatDate(followUp.created_at)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {followUp.notes && (
+                      <div className="activity-notes">
+                        <strong>Notes</strong>
+                        <p>{followUp.notes}</p>
+                      </div>
+                    )}
+
+                    {String(followUp.status || "").toLowerCase() === "pending" && (
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="submit-lead-button"
+                          onClick={() =>
+                            handleCompleteFollowUp(followUp.id)
+                          }
+                          disabled={
+                            updatingFollowUpId === followUp.id
+                          }
+                        >
+                          {updatingFollowUpId === followUp.id
+                            ? "Completing..."
+                            : "Mark Completed"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="cancel-button"
+                          onClick={() =>
+                            handleCancelFollowUp(followUp.id)
+                          }
+                          disabled={
+                            updatingFollowUpId === followUp.id
+                          }
+                        >
+                          {updatingFollowUpId === followUp.id
+                            ? "Cancelling..."
+                            : "Cancel Follow-up"}
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : activeView === "properties" ? (
+          <section className="panel crm-properties-panel">
+            <div className="panel-header crm-panel-header">
+              <div>
+                <h2>Properties</h2>
+                <p>
+                  Browse and filter properties available to the AI sales agent.
+                </p>
+              </div>
+
+              <button
+                className="refresh-button"
+                onClick={loadProperties}
+                disabled={propertiesLoading}
+              >
+                {propertiesLoading ? "Loading..." : "Refresh Properties"}
+              </button>
+            </div>
+
+            <div className="crm-toolbar property-toolbar">
+              <input
+                className="crm-search"
+                type="text"
+                value={propertySearch}
+                onChange={(event) => setPropertySearch(event.target.value)}
+                placeholder="Search title, location or property type..."
+              />
+
+              <select
+                className="crm-filter"
+                value={propertyTypeFilter}
+                onChange={(event) => setPropertyTypeFilter(event.target.value)}
+              >
+                <option value="ALL">All Types</option>
+                {propertyTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="crm-filter"
+                value={propertyAvailabilityFilter}
+                onChange={(event) =>
+                  setPropertyAvailabilityFilter(event.target.value)
+                }
+              >
+                <option value="ALL">All Availability</option>
+                <option value="AVAILABLE">Available</option>
+                <option value="UNAVAILABLE">Unavailable</option>
+              </select>
+
+              <input
+                className="crm-price-filter"
+                type="number"
+                min="0"
+                value={propertyMaxPrice}
+                onChange={(event) => setPropertyMaxPrice(event.target.value)}
+                placeholder="Max ₹ lakhs"
+              />
+            </div>
+
+            {propertiesError && (
+              <div className="error-card crm-error">
+                {propertiesError}
+              </div>
+            )}
+
+            {propertiesLoading ? (
+              <div className="loading-card crm-loading">
+                Loading properties...
+              </div>
+            ) : filteredProperties.length === 0 ? (
+              <div className="empty-state crm-empty">
+                No properties match your current filters.
+              </div>
+            ) : (
+              <div className="property-grid">
+                {filteredProperties.map((property) => (
+                  <article className="property-card" key={property.id}>
+                    <div className="property-card-top">
+                      <span className="property-id">
+                        Property #{property.id}
+                      </span>
+
+                      <span
+                        className={`availability-badge ${
+                          property.available ? "available" : "unavailable"
+                        }`}
+                      >
+                        {property.available ? "Available" : "Unavailable"}
+                      </span>
+                    </div>
+
+                    <h3>
+                      {property.title || "Untitled Property"}
+                    </h3>
+
+                    <p className="property-location">
+                      {property.location || "Location not specified"}
+                    </p>
+
+                    <div className="property-price">
+                      {property.price || "Price on request"}
+                    </div>
+
+                    <div className="property-meta">
+                      <span>{property.property_type || "—"}</span>
+                      <span>{property.bedrooms ?? "—"} bed</span>
+                      <span>{property.bathrooms ?? "—"} bath</span>
+                      <span>
+                        {property.area_sqft
+                          ? `${property.area_sqft} sq.ft.`
+                          : "Area —"}
+                      </span>
+                    </div>
+
+                    {property.description && (
+                      <p className="property-description">
+                        {property.description}
+                      </p>
+                    )}
+
+                    {property.amenities && (
+                      <div className="property-amenities">
+                        <strong>Amenities</strong>
+                        <span>{property.amenities}</span>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : activeView === "leads" ? (
+          <section className="panel crm-leads-panel">
+            <div className="panel-header crm-panel-header">
+              <div>
+                <h2>Leads</h2>
+                <p>
+                  Search, filter and manage your complete sales pipeline.
+                </p>
+              </div>
+
+              <button
+                className="add-lead-button"
+                onClick={() => {
+                  setFormError("");
+                  setFormSuccess("");
+                  setShowAddLead(true);
+                }}
+              >
+                + Add New Lead
+              </button>
+            </div>
+
+            <div className="crm-toolbar">
+              <input
+                className="crm-search"
+                type="text"
+                value={leadSearch}
+                onChange={(event) =>
+                  setLeadSearch(event.target.value)
+                }
+                placeholder="Search name, phone, location or property..."
+              />
+
+              <select
+                className="crm-filter"
+                value={leadStageFilter}
+                onChange={(event) =>
+                  setLeadStageFilter(event.target.value)
+                }
+              >
+                <option value="ALL">All Stages</option>
+                {pipelineStages.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage.replaceAll("_", " ")}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                className="refresh-button"
+                onClick={loadLeads}
+                disabled={leadsLoading}
+              >
+                {leadsLoading ? "Loading..." : "Refresh Leads"}
+              </button>
+            </div>
+
+            {leadsError && (
+              <div className="error-card crm-error">
+                {leadsError}
+              </div>
+            )}
+
+            {leadsLoading ? (
+              <div className="loading-card crm-loading">
+                Loading leads...
+              </div>
+            ) : filteredLeads.length === 0 ? (
+              <div className="empty-state crm-empty">
+                No leads match your current search or filter.
+              </div>
+            ) : (
+              <div className="lead-table-wrapper">
+                <table className="lead-table crm-lead-table">
+                  <thead>
+                    <tr>
+                      <th>Lead</th>
+                      <th>Phone</th>
+                      <th>Budget</th>
+                      <th>Location</th>
+                      <th>Property</th>
+                      <th>Intent</th>
+                      <th>Score</th>
+                      <th>Stage</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {filteredLeads.map((lead) => (
+                      <tr
+                        key={lead.id}
+                        className="clickable-lead-row"
+                        onClick={() => openLead(lead)}
+                      >
+                        <td>
+                          <div className="lead-name">
+                            {lead.name || "Unnamed Lead"}
+                          </div>
+                          <div className="lead-id">
+                            Lead #{lead.id}
+                          </div>
+                        </td>
+
+                        <td>
+                          {lead.phone || "—"}
+                        </td>
+
+                        <td>
+                          {lead.budget || "—"}
+                        </td>
+
+                        <td>
+                          {lead.location || "—"}
+                        </td>
+
+                        <td>
+                          {lead.property_type || "—"}
+                        </td>
+
+                        <td>
+                          <span
+                            className={`intent-badge ${
+                              lead.buying_intent || ""
+                            }`}
+                          >
+                            {lead.buying_intent || "—"}
+                          </span>
+                        </td>
+
+                        <td>
+                          <span className="score">
+                            {lead.lead_score ?? 0}
+                          </span>
+                        </td>
+
+                        <td>
+                          <span className="stage-badge">
+                            {(lead.pipeline_stage || "NEW").replaceAll(
+                              "_",
+                              " "
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ) : (
+          <>
+        {loading && (
+          <div className="loading-card">
+            Loading dashboard...
+          </div>
+        )}
+
+        {error && (
+          <div className="error-card">
+            {error}
+          </div>
+        )}
+
+        {!loading &&
+          !error &&
+          summary && (
+            <>
+
+              {/* ==================================================
+                  STATS
+                  ================================================== */}
+
+              <section className="stats-grid">
+
+                <div className="stat-card">
+                  <span>Total Leads</span>
+                  <strong>
+                    {summary.total_leads}
+                  </strong>
+                </div>
+
+                <div className="stat-card">
+                  <span>Hot Leads</span>
+                  <strong>
+                    {summary.hot_leads}
+                  </strong>
+                </div>
+
+                <div className="stat-card">
+                  <span>Qualified</span>
+                  <strong>
+                    {summary.qualified_leads}
+                  </strong>
+                </div>
+
+                <div className="stat-card">
+                  <span>Site Visits</span>
+                  <strong>
+                    {summary.site_visits}
+                  </strong>
+                </div>
+
+                <div className="stat-card">
+                  <span>Pending Follow-ups</span>
+                  <strong>
+                    {summary.pending_follow_ups}
+                  </strong>
+                </div>
+
+                <div className="stat-card">
+                  <span>Converted</span>
+                  <strong>
+                    {summary.converted_leads}
+                  </strong>
+                </div>
+
+                <div className="stat-card">
+                  <span>Average Score</span>
+                  <strong>
+                    {summary.average_lead_score}
+                  </strong>
+                </div>
+
+              </section>
+
+
+              {/* ==================================================
+                  PIPELINE
+                  ================================================== */}
+
+              <section className="panel">
+
+                <div className="panel-header">
+
+                  <div>
+                    <h2>
+                      Sales Pipeline
+                    </h2>
+
+                    <p>
+                      Current distribution of your leads
+                    </p>
+                  </div>
+
+                </div>
+
+
+                <div className="pipeline">
+
+                  {pipelineStages.map(
+                    (stage) => (
+
+                      <div
+                        className="pipeline-stage"
+                        key={stage}
+                      >
+
+                        <span className="stage-name">
+                          {stage.replaceAll(
+                            "_",
+                            " "
+                          )}
+                        </span>
+
+                        <strong>
+                          {pipeline[stage] || 0}
+                        </strong>
+
+                      </div>
+
+                    )
+                  )}
+
+                </div>
+
+              </section>
+
+
+              {/* ==================================================
+                  HOT LEADS
+                  ================================================== */}
+
+              <section className="panel">
+
+                <div className="panel-header">
+
+                  <div>
+                    <h2>
+                      Hot Leads
+                    </h2>
+
+                    <p>
+                      Leads with a score of 70 or higher
+                    </p>
+                  </div>
+
+                </div>
+
+
+                {hotLeads.length === 0 ? (
+
+                  <div className="empty-state">
+                    No hot leads available.
+                  </div>
+
+                ) : (
+
+                  <div className="lead-table-wrapper">
+
+                    <table className="lead-table">
+
+                      <thead>
+
+                        <tr>
+                          <th>Lead</th>
+                          <th>Budget</th>
+                          <th>Location</th>
+                          <th>Property</th>
+                          <th>Intent</th>
+                          <th>Score</th>
+                          <th>Stage</th>
+                        </tr>
+
+                      </thead>
+
+
+                      <tbody>
+
+                        {hotLeads.map(
+                          (lead) => (
+
+                            <tr
+                              key={lead.id}
+                              className="clickable-lead-row"
+                              onClick={() =>
+                                openLead(lead)
+                              }
+                            >
+
+                              <td>
+
+                                <div className="lead-name">
+                                  {lead.name ||
+                                    "Unnamed Lead"}
+                                </div>
+
+                                <div className="lead-id">
+                                  Lead #{lead.id}
+                                </div>
+
+                              </td>
+
+                              <td>
+                                {lead.budget ||
+                                  "â€”"}
+                              </td>
+
+                              <td>
+                                {lead.location ||
+                                  "â€”"}
+                              </td>
+
+                              <td>
+                                {lead.property_type ||
+                                  "â€”"}
+                              </td>
+
+                              <td>
+
+                                <span
+                                  className={`intent-badge ${
+                                    lead.buying_intent ||
+                                    ""
+                                  }`}
+                                >
+                                  {lead.buying_intent ||
+                                    "â€”"}
+                                </span>
+
+                              </td>
+
+                              <td>
+
+                                <span className="score">
+                                  {lead.lead_score}
+                                </span>
+
+                              </td>
+
+                              <td>
+
+                                <span className="stage-badge">
+                                  {(
+                                    lead.pipeline_stage ||
+                                    "NEW"
+                                  ).replaceAll(
+                                    "_",
+                                    " "
+                                  )}
+                                </span>
+
+                              </td>
+
+                            </tr>
+
+                          )
+                        )}
+
+                      </tbody>
+
+                    </table>
+
+                  </div>
+
+                )}
+
+              </section>
+
+            </>
+          )}
+          </>
+        )}
+
+      </main>
+
+
+      {/* ======================================================
+          ADD LEAD MODAL
+          ====================================================== */}
+
+      {showAddLead && (
+
+        <div
+          className="modal-overlay"
+          onMouseDown={(event) => {
+
+            if (
+              event.target === event.currentTarget &&
+              !creatingLead
+            ) {
+              setShowAddLead(false);
+            }
+
+          }}
+        >
+
+          <div className="modal">
+
+            <div className="modal-header">
+
+              <div>
+
+                <h2>
+                  Add New Lead
+                </h2>
+
+                <p>
+                  Enter the customer's requirement.
+                  AI will qualify the lead automatically.
+                </p>
+
+              </div>
+
+              <button
+                className="close-button"
+                onClick={() =>
+                  setShowAddLead(false)
+                }
+                disabled={creatingLead}
+              >
+                Ã—
+              </button>
+
+            </div>
+
+
+            <form
+              className="lead-form"
+              onSubmit={handleCreateLead}
+            >
+
+              {formError && (
+                <div className="form-error">
+                  {formError}
+                </div>
+              )}
+
+              {formSuccess && (
+                <div className="form-success">
+                  {formSuccess}
+                </div>
+              )}
+
+
+              <div className="form-group">
+
+                <label>
+                  Name
+                </label>
+
+                <input
+                  type="text"
+                  value={newLead.name}
+                  onChange={(event) =>
+                    setNewLead({
+                      ...newLead,
+                      name: event.target.value,
+                    })
+                  }
+                  placeholder="Rahul Sharma"
+                  disabled={creatingLead}
+                />
+
+              </div>
+
+
+              <div className="form-group">
+
+                <label>
+                  Phone
+                </label>
+
+                <input
+                  type="tel"
+                  value={newLead.phone}
+                  onChange={(event) =>
+                    setNewLead({
+                      ...newLead,
+                      phone: event.target.value,
+                    })
+                  }
+                  placeholder="9876543210"
+                  disabled={creatingLead}
+                />
+
+              </div>
+
+
+              <div className="form-group">
+
+                <label>
+                  Requirement
+                </label>
+
+                <textarea
+                  value={newLead.requirement}
+                  onChange={(event) =>
+                    setNewLead({
+                      ...newLead,
+                      requirement:
+                        event.target.value,
+                    })
+                  }
+                  placeholder="I am looking for a 3BHK apartment in Noida. My budget is around 1.2 crore and I want to buy within 6 months for self use."
+                  rows={5}
+                  disabled={creatingLead}
+                />
+
+                <small>
+                  AI will extract budget,
+                  location, property type,
+                  purpose, timeline and
+                  buying intent.
+                </small>
+
+              </div>
+
+
+              <div className="form-actions">
+
+                <button
+                  type="button"
+                  className="cancel-button"
+                  onClick={() =>
+                    setShowAddLead(false)
+                  }
+                  disabled={creatingLead}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="submit-lead-button"
+                  disabled={creatingLead}
+                >
+                  {creatingLead
+                    ? "Qualifying..."
+                    : "Create & Qualify Lead"}
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* ======================================================
+          LEAD DETAILS + AI CHAT
+          ====================================================== */}
+
+      {selectedLead && (
+
+        <div
+          className="modal-overlay"
+          onMouseDown={(event) => {
+
+            if (
+              event.target === event.currentTarget &&
+              !sendingMessage
+            ) {
+              closeLead();
+            }
+
+          }}
+        >
+
+          <div className="modal lead-details-modal">
+
+            <div className="modal-header">
+
+              <div>
+
+                <h2>
+                  {selectedLead.name ||
+                    "Lead Details"}
+                </h2>
+
+                <p>
+                  Lead #{selectedLead.id}
+                  {" â€¢ "}
+                  {selectedLead.pipeline_stage ||
+                    "NEW"}
+                </p>
+
+              </div>
+
+              <button
+                className="close-button"
+                onClick={closeLead}
+                disabled={sendingMessage}
+              >
+                Ã—
+              </button>
+
+            </div>
+
+
+            <div className="lead-details-content">
+
+              {/* ==================================================
+                  LEAD SUMMARY
+                  ================================================== */}
+
+              <div className="lead-details-title">
+
+                <div>
+                  <h3>
+                    Lead Overview
+                  </h3>
+
+                  <span>
+                    AI-qualified customer
+                  </span>
+                </div>
+
+                <button
+                  className="schedule-follow-up-button"
+                  onClick={() => {
+                    setFollowUpError("");
+                    setFollowUpSuccess("");
+                    setShowFollowUp(true);
+                  }}
+                >
+                  + Schedule Follow-up
+                </button>
+
+              </div>
+
+
+              <div className="lead-details-grid">
+
+                <div className="detail-item">
+                  <span>Phone</span>
+                  <strong>
+                    {selectedLead.phone ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Budget</span>
+                  <strong>
+                    {selectedLead.budget ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Location</span>
+                  <strong>
+                    {selectedLead.location ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Property</span>
+                  <strong>
+                    {selectedLead.property_type ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Purpose</span>
+                  <strong>
+                    {selectedLead.purpose ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Timeline</span>
+                  <strong>
+                    {selectedLead.timeline ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Buying Intent</span>
+                  <strong>
+                    {selectedLead.buying_intent ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Qualification</span>
+                  <strong>
+                    {selectedLead.qualification_status ||
+                      "Not provided"}
+                  </strong>
+                </div>
+
+                <div className="detail-item">
+                  <span>Lead Score</span>
+                  <strong>
+                    {selectedLead.lead_score ?? 0}
+                  </strong>
+                </div>
+
+              </div>
+
+
+              {/* ==================================================
+                  NEXT BEST ACTION
+                  ================================================== */}
+
+              <section
+                style={{
+                  marginTop: "22px",
+                  marginBottom: "22px",
+                  padding: "20px 22px",
+                  border: "1px solid #dbe3f0",
+                  borderRadius: "14px",
+                  background: "#f8fbff",
+                  boxShadow: "0 4px 14px rgba(15, 23, 42, 0.05)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "16px",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        marginBottom: "6px",
+                        opacity: 0.65,
+                      }}
+                    >
+                      AI Sales Intelligence
+                    </div>
+
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: "20px",
+                      }}
+                    >
+                      Next Best Action
+                    </h3>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={() => loadNextBestAction(selectedLead.id)}
+                    disabled={nextBestActionLoading}
+                  >
+                    {nextBestActionLoading ? "Loading..." : "Refresh"}
+                  </button>
+                </div>
+
+                {nextBestActionError && (
+                  <div
+                    className="error-card"
+                    style={{ marginTop: "14px" }}
+                  >
+                    {nextBestActionError}
+                  </div>
+                )}
+
+                {nextBestActionLoading ? (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      padding: "14px 0",
+                      opacity: 0.7,
+                    }}
+                  >
+                    Determining the next best action...
+                  </div>
+                ) : nextBestAction ? (
+                  <div style={{ marginTop: "16px" }}>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        padding: "8px 12px",
+                        borderRadius: "999px",
+                        background: "#e8f1ff",
+                        fontWeight: "700",
+                        fontSize: "14px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {String(
+                        nextBestAction.action ||
+                          "No action available"
+                      )
+                        .replaceAll("_", " ")
+                        .replace(/\b\w/g, (letter) =>
+                          letter.toUpperCase()
+                        )}
+                    </div>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        lineHeight: 1.6,
+                        opacity: 0.82,
+                      }}
+                    >
+                      {nextBestAction.reason ||
+                        "No reason was provided."}
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      opacity: 0.7,
+                    }}
+                  >
+                    No next best action is currently available.
+                  </div>
+                )}
+              </section>
+
+
+              {/* ==================================================
+                  LEAD HEALTH & PRIORITY
+                  ================================================== */}
+
+              <section
+                style={{
+                  marginTop: "22px",
+                  marginBottom: "22px",
+                  padding: "20px 22px",
+                  border: "1px solid #dbe3f0",
+                  borderRadius: "14px",
+                  background: "#ffffff",
+                  boxShadow: "0 4px 14px rgba(15, 23, 42, 0.05)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "16px",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        marginBottom: "6px",
+                        opacity: 0.65,
+                      }}
+                    >
+                      Sales Health
+                    </div>
+
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: "20px",
+                      }}
+                    >
+                      Lead Health & Priority
+                    </h3>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={() => loadLeadHealth(selectedLead.id)}
+                    disabled={leadHealthLoading}
+                  >
+                    {leadHealthLoading ? "Loading..." : "Refresh"}
+                  </button>
+                </div>
+
+                {leadHealthError && (
+                  <div
+                    className="error-card"
+                    style={{ marginTop: "14px" }}
+                  >
+                    {leadHealthError}
+                  </div>
+                )}
+
+                {leadHealthLoading ? (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      padding: "14px 0",
+                      opacity: 0.7,
+                    }}
+                  >
+                    Analyzing lead health...
+                  </div>
+                ) : leadHealth ? (
+                  <div style={{ marginTop: "18px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "10px",
+                        marginBottom: "18px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          padding: "8px 14px",
+                          borderRadius: "999px",
+                          background:
+                            leadHealth.health === "HOT"
+                              ? "#fee2e2"
+                              : leadHealth.health === "WARM"
+                              ? "#fef3c7"
+                              : leadHealth.health === "CONVERTED"
+                              ? "#dcfce7"
+                              : "#e5e7eb",
+                          fontWeight: "800",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {leadHealth.health === "HOT"
+                          ? "🔥 HOT LEAD"
+                          : leadHealth.health === "WARM"
+                          ? "🟡 WARM LEAD"
+                          : leadHealth.health === "CONVERTED"
+                          ? "✅ CONVERTED"
+                          : "⚪ COLD LEAD"}
+                      </span>
+
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          padding: "8px 14px",
+                          borderRadius: "999px",
+                          background:
+                            leadHealth.priority === "URGENT"
+                              ? "#fee2e2"
+                              : leadHealth.priority === "HIGH"
+                              ? "#ffedd5"
+                              : leadHealth.priority === "MEDIUM"
+                              ? "#fef3c7"
+                              : "#e5e7eb",
+                          fontWeight: "800",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {leadHealth.priority} PRIORITY
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(140px, 1fr))",
+                        gap: "12px",
+                        marginBottom: "18px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: "10px",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            opacity: 0.65,
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Lead Score
+                        </span>
+                        <strong style={{ fontSize: "20px" }}>
+                          {leadHealth.lead_score ?? 0}
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: "10px",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            opacity: 0.65,
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Pipeline
+                        </span>
+                        <strong>
+                          {leadHealth.pipeline_stage || "NEW"}
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: "10px",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            opacity: 0.65,
+                            marginBottom: "4px",
+                          }}
+                        >
+                          Buying Intent
+                        </span>
+                        <strong style={{ textTransform: "capitalize" }}>
+                          {leadHealth.buying_intent || "Unknown"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "14px 16px",
+                        borderRadius: "10px",
+                        background: "#f8fbff",
+                        marginBottom: "14px",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          display: "block",
+                          marginBottom: "6px",
+                        }}
+                      >
+                        Recommended Focus
+                      </strong>
+                      <p
+                        style={{
+                          margin: 0,
+                          lineHeight: 1.6,
+                          opacity: 0.82,
+                        }}
+                      >
+                        {leadHealth.recommended_focus ||
+                          "No recommendation available."}
+                      </p>
+                    </div>
+
+                    {leadHealth.risks && leadHealth.risks.length > 0 ? (
+                      <div
+                        style={{
+                          padding: "14px 16px",
+                          borderRadius: "10px",
+                          background: "#fff7ed",
+                          border: "1px solid #fed7aa",
+                        }}
+                      >
+                        <strong
+                          style={{
+                            display: "block",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          ⚠️ Risk Signals
+                        </strong>
+                        <ul
+                          style={{
+                            margin: 0,
+                            paddingLeft: "20px",
+                          }}
+                        >
+                          {leadHealth.risks.map((risk, index) => (
+                            <li key={index}>{risk}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          opacity: 0.65,
+                        }}
+                      >
+                        ✓ No current risk signals detected.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      opacity: 0.7,
+                    }}
+                  >
+                    No lead health information is currently available.
+                  </div>
+                )}
+              </section>
+
+
+              {/* ==================================================
+                  REQUIREMENT
+                  ================================================== */}
+
+              <div className="requirement-section">
+
+                <span>
+                  Original Requirement
+                </span>
+
+                <p>
+                  {selectedLead.requirement ||
+                    "No requirement provided."}
+                </p>
+
+              </div>
+
+
+              {/* ==================================================
+                  AI CHAT
+                  ================================================== */}
+
+              <section className="conversation-section">
+
+                <div className="conversation-section-header">
+
+                  <div>
+                    <h3>
+                      AI Sales Agent
+                    </h3>
+
+                    <p>
+                      Continue the conversation with
+                      this lead's AI assistant.
+                    </p>
+                  </div>
+
+                </div>
+
+
+                {leadDetailsLoading ? (
+
+                  <div className="conversation-loading">
+                    Loading conversation...
+                  </div>
+
+                ) : (
+
+                  <>
+
+                    {chatError && (
+                      <div className="conversation-error">
+                        {chatError}
+                      </div>
+                    )}
+
+
+                    <div className="conversation-list">
+
+                      {conversations.length === 0 ? (
+
+                        <div className="conversation-empty">
+                          No conversation yet.
+                          Send the first message below.
+                        </div>
+
+                      ) : (
+
+                        conversations.map(
+                          (conversation, index) => (
+
+                            <div
+                              key={
+                                `${conversation.created_at}-${index}`
+                              }
+                              className={`conversation-message ${
+                                conversation.role ===
+                                "user"
+                                  ? "customer-message"
+                                  : "assistant-message"
+                              }`}
+                            >
+
+                              <div className="conversation-role">
+                                {conversation.role ===
+                                "user"
+                                  ? "YOU"
+                                  : "AI SALES AGENT"}
+                              </div>
+
+                              <div className="conversation-text">
+                                {conversation.message}
+                              </div>
+
+                              {conversation.created_at && (
+                                <div className="conversation-time">
+                                  {formatDate(
+                                    conversation.created_at
+                                  )}
+                                </div>
+                              )}
+
+                            </div>
+
+                          )
+                        )
+
+                      )}
+
+                    </div>
+
+
+                    <form
+                      className="chat-form"
+                      onSubmit={handleSendMessage}
+                    >
+
+                      <textarea
+                        className="chat-input"
+                        value={chatMessage}
+                        onChange={(event) =>
+                          setChatMessage(
+                            event.target.value
+                          )
+                        }
+                        placeholder="Ask the AI about this lead..."
+                        rows={3}
+                        disabled={sendingMessage}
+                      />
+
+                      <button
+                        type="submit"
+                        className="chat-send-button"
+                        disabled={
+                          sendingMessage ||
+                          !chatMessage.trim()
+                        }
+                      >
+                        {sendingMessage
+                          ? "Thinking..."
+                          : "Send Message"}
+                      </button>
+
+                    </form>
+
+                  </>
+
+                )}
+
+              </section>
+
+
+              {/* ==================================================
+                  ACTIVITY TIMELINE
+                  ================================================== */}
+
+              <section className="lead-activity-section">
+
+                <div className="lead-activity-header">
+                  <div>
+                    <h3>Activity Timeline</h3>
+                    <p>
+                      Complete history of actions and communications for this lead.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={() => loadLeadActivities(selectedLead.id)}
+                    disabled={leadActivitiesLoading}
+                  >
+                    {leadActivitiesLoading ? "Loading..." : "Refresh"}
+                  </button>
+                </div>
+
+                {leadActivitiesError && (
+                  <div className="activity-timeline-error">
+                    {leadActivitiesError}
+                  </div>
+                )}
+
+                {leadActivitiesLoading ? (
+                  <div className="activity-timeline-empty">
+                    Loading activity timeline...
+                  </div>
+                ) : leadActivities.length === 0 ? (
+                  <div className="activity-timeline-empty">
+                    No activity recorded for this lead yet.
+                  </div>
+                ) : (
+                  <div className="activity-timeline">
+
+                    {leadActivities.map((activity, index) => (
+                      <div
+                        className="timeline-item"
+                        key={`${activity.type}-${activity.date}-${index}`}
+                      >
+
+                        <div className="timeline-marker">
+                          {activityIcon(activity.type)}
+                        </div>
+
+                        <div className="timeline-content">
+
+                          <div className="timeline-top">
+                            <div>
+                              <span className="timeline-type">
+                                {activityLabel(activity.type)}
+                              </span>
+
+                              <h4>
+                                {activity.title || activityLabel(activity.type)}
+                              </h4>
+                            </div>
+
+                            <span
+                              className={`timeline-status ${
+                                String(activity.status || "")
+                                  .toLowerCase()
+                                  .replaceAll(" ", "-")
+                              }`}
+                            >
+                              {activity.status || "unknown"}
+                            </span>
+                          </div>
+
+                          <p className="timeline-description">
+                            {activity.description || "No description available."}
+                          </p>
+
+                          <div className="timeline-date">
+                            {formatDate(activity.date)}
+                          </div>
+
+                          {activity.metadata &&
+                            Object.keys(activity.metadata).length > 0 && (
+                              <div className="timeline-metadata">
+                                {activity.metadata.channel && (
+                                  <span>
+                                    Channel: {activity.metadata.channel}
+                                  </span>
+                                )}
+
+                                {activity.metadata.direction && (
+                                  <span>
+                                    Direction: {activity.metadata.direction}
+                                  </span>
+                                )}
+
+                                {activity.metadata.follow_up_id && (
+                                  <span>
+                                    Follow-up #{activity.metadata.follow_up_id}
+                                  </span>
+                                )}
+
+                                {activity.metadata.site_visit_id && (
+                                  <span>
+                                    Site Visit #{activity.metadata.site_visit_id}
+                                  </span>
+                                )}
+
+                                {activity.metadata.property_title && (
+                                  <span>
+                                    Property: {activity.metadata.property_title}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                        </div>
+                      </div>
+                    ))}
+
+                  </div>
+                )}
+
+              </section>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* ======================================================
+          FOLLOW-UP MODAL
+          ====================================================== */}
+
+      {showFollowUp && selectedLead && (
+
+        <div
+          className="modal-overlay follow-up-modal-overlay"
+          onMouseDown={(event) => {
+
+            if (
+              event.target === event.currentTarget &&
+              !schedulingFollowUp
+            ) {
+              setShowFollowUp(false);
+            }
+
+          }}
+        >
+
+          <div className="modal follow-up-modal">
+
+            <div className="modal-header">
+
+              <div>
+
+                <h2>
+                  Schedule Follow-up
+                </h2>
+
+                <p>
+                  Schedule a follow-up for{" "}
+                  {selectedLead.name ||
+                    "this lead"}.
+                </p>
+
+              </div>
+
+              <button
+                className="close-button"
+                onClick={() =>
+                  setShowFollowUp(false)
+                }
+                disabled={schedulingFollowUp}
+              >
+                Ã—
+              </button>
+
+            </div>
+
+
+            <form
+              className="lead-form"
+              onSubmit={handleScheduleFollowUp}
+            >
+
+              {followUpError && (
+                <div className="form-error">
+                  {followUpError}
+                </div>
+              )}
+
+              {followUpSuccess && (
+                <div className="form-success">
+                  {followUpSuccess}
+                </div>
+              )}
+
+
+              <div className="form-group">
+
+                <label>
+                  Follow-up Date & Time
+                </label>
+
+                <input
+                  type="datetime-local"
+                  value={
+                    followUpForm.follow_up_date
+                  }
+                  onChange={(event) =>
+                    setFollowUpForm({
+                      ...followUpForm,
+                      follow_up_date:
+                        event.target.value,
+                    })
+                  }
+                  disabled={schedulingFollowUp}
+                />
+
+              </div>
+
+
+              <div className="form-group">
+
+                <label>
+                  Message{" "}
+                  <span className="optional-label">
+                    (optional)
+                  </span>
+                </label>
+
+                <textarea
+                  value={
+                    followUpForm.message
+                  }
+                  onChange={(event) =>
+                    setFollowUpForm({
+                      ...followUpForm,
+                      message:
+                        event.target.value,
+                    })
+                  }
+                  placeholder="Follow up regarding the customer's property requirement."
+                  rows={4}
+                  disabled={schedulingFollowUp}
+                />
+
+                <small>
+                  If left blank, the AI can generate
+                  a personalized message when the
+                  follow-up becomes due.
+                </small>
+
+              </div>
+
+
+              <div className="form-group">
+
+                <label>
+                  Notes{" "}
+                  <span className="optional-label">
+                    (optional)
+                  </span>
+                </label>
+
+                <textarea
+                  value={
+                    followUpForm.notes
+                  }
+                  onChange={(event) =>
+                    setFollowUpForm({
+                      ...followUpForm,
+                      notes:
+                        event.target.value,
+                    })
+                  }
+                  placeholder="Any internal notes for this follow-up..."
+                  rows={3}
+                  disabled={schedulingFollowUp}
+                />
+
+              </div>
+
+
+              <div className="form-actions">
+
+                <button
+                  type="button"
+                  className="cancel-button"
+                  onClick={() =>
+                    setShowFollowUp(false)
+                  }
+                  disabled={schedulingFollowUp}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="submit-lead-button"
+                  disabled={schedulingFollowUp}
+                >
+                  {schedulingFollowUp
+                    ? "Scheduling..."
+                    : "Schedule Follow-up"}
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
+
+      )}
+
+    </div>
+  );
+}
+
+export default App;
