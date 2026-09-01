@@ -44,3 +44,6 @@ Thumbs.db
 
 # Local development archive
 .archive/
+
+# Local database backups
+ai_sales_agent_backup.dump
