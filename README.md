@@ -2,6 +2,13 @@
 
 An AI-powered real-estate sales intelligence and CRM platform built with React, FastAPI, PostgreSQL, and Google Gemini.
 
+
+## 🌐 Live Demo
+
+[Open AI Sales Agent](https://ai-sales-agent-frontend-fg0c.onrender.com)
+
+
+
 ## Architecture
 
 ![AI Sales Agent Architecture](docs/architecture.png)
