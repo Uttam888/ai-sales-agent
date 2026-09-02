@@ -206,16 +206,19 @@ def build_sales_history_context(
             "replacement visit is now scheduled."
         )
 
-    # --------------------------------------------------------
+       # --------------------------------------------------------
     # SALES ACTION OUTCOMES
     # --------------------------------------------------------
     #
-    # This exposes the most recent AI sales action outcome
-    # to the frontend so that pending actions can be resolved
-    # through the "Record Outcome" UI.
+    # Expose recent AI sales action outcomes to the frontend.
+    # This allows:
+    #   1. Pending actions to be resolved through the
+    #      "Record Outcome" UI.
+    #   2. The complete action outcome history to be displayed
+    #      in the Sales History & Outcomes section.
     #
 
-    latest_action_outcome = (
+    action_outcomes = (
         db.query(SalesActionOutcome)
         .filter(
             SalesActionOutcome.lead_id == lead.id
@@ -224,26 +227,40 @@ def build_sales_history_context(
             SalesActionOutcome.created_at.desc(),
             SalesActionOutcome.id.desc()
         )
-        .first()
+        .limit(limit)
+        .all()
     )
 
-    latest_action_outcome_data = None
+    action_outcome_events = []
 
-    if latest_action_outcome:
-        latest_action_outcome_data = {
-            "id": latest_action_outcome.id,
-            "action": latest_action_outcome.action,
-            "execution_status": latest_action_outcome.execution_status,
-            "outcome": latest_action_outcome.outcome,
-            "notes": latest_action_outcome.notes,
-            "created_at": latest_action_outcome.created_at,
-            "updated_at": latest_action_outcome.updated_at
-        }
+    for item in action_outcomes:
+        action_outcome_events.append({
+            "id": item.id,
+            "action": item.action,
+            "execution_status": item.execution_status,
+            "outcome": item.outcome,
+            "notes": item.notes,
+            "created_at": item.created_at,
+            "updated_at": item.updated_at
+        })
+
+    latest_action_outcome_data = (
+        action_outcome_events[0]
+        if action_outcome_events
+        else None
+    )
+
+    if action_outcome_events:
+        history_insights.append(
+            f"{len(action_outcome_events)} recent sales action "
+            "outcome record(s) are available."
+        )
 
     return {
         "events": events,
         "insights": history_insights,
         "event_count": len(events),
+        "action_outcomes": action_outcome_events,
         "latest_action_outcome": latest_action_outcome_data
     }
 
