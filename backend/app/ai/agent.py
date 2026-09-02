@@ -271,6 +271,8 @@ def execute_tool(
 
         "schedule_site_visit",
 
+        "cancel_site_visit",
+
         "create_follow_up",
 
         "get_pending_follow_ups"
@@ -726,6 +728,8 @@ def run_agent_with_tools(
 
             SCHEDULE_SITE_VISIT_DECLARATION,
 
+            CANCEL_SITE_VISIT_DECLARATION,
+
             CREATE_FOLLOW_UP_DECLARATION,
 
             GET_PENDING_FOLLOW_UPS_DECLARATION
@@ -808,6 +812,13 @@ Never invent properties.
 When a customer explicitly requests a site visit,
 use schedule_site_visit only when the property,
 date and time are known.
+
+When a customer explicitly asks to cancel a scheduled
+site visit, use cancel_site_visit. Do not tell the
+customer that you are unable to cancel appointments.
+If the visit cannot be uniquely identified, ask for
+the property or visit date and time. Never reveal
+internal site visit IDs.
 
 When a customer requests a follow-up,
 use create_follow_up only when an explicit
