@@ -235,6 +235,31 @@ SCHEDULE_SITE_VISIT_DECLARATION = types.FunctionDeclaration(
 
 
 # ============================================================
+# CANCEL SITE VISIT TOOL DECLARATION
+# ============================================================
+
+CANCEL_SITE_VISIT_DECLARATION = types.FunctionDeclaration(
+    name="cancel_site_visit",
+    description=(
+        "Cancel a scheduled site visit for the current sales lead. "
+        "Use this only when the customer explicitly asks to cancel "
+        "a site visit. If multiple scheduled visits exist, provide "
+        "the property and/or visit date and time to identify the visit."
+    ),
+    parameters={
+        "type": "OBJECT",
+        "properties": {
+            "lead_id": {"type": "INTEGER", "description": "ID of the lead."},
+            "property_title": {"type": "STRING", "description": "Optional property title identifying the visit."},
+            "visit_date": {"type": "STRING", "description": "Optional site visit date and time in ISO format, for example 2026-09-05T17:00:00."},
+            "notes": {"type": "STRING", "description": "Optional reason or internal note for the cancellation."}
+        },
+        "required": ["lead_id"]
+    }
+)
+
+
+# ============================================================
 # CREATE FOLLOW-UP TOOL DECLARATION
 # ============================================================
 
@@ -1323,6 +1348,60 @@ def schedule_site_visit(
                 lead.qualification_status
         }
     }
+
+
+# ============================================================
+# CANCEL SITE VISIT
+# ============================================================
+
+def cancel_site_visit(
+    db, lead_id: int, property_title: str | None = None,
+    visit_date: str | None = None, notes: str | None = None
+):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        return {"success": False, "error": f"Lead {lead_id} was not found."}
+
+    query = (db.query(SiteVisit, Property)
+        .join(Property, SiteVisit.property_id == Property.id)
+        .filter(SiteVisit.lead_id == lead_id, SiteVisit.status == "scheduled"))
+
+    if property_title:
+        query = query.filter(Property.title.ilike(f"%{property_title.strip()}%"))
+
+    if visit_date:
+        try:
+            parsed_visit_date = datetime.fromisoformat(visit_date)
+        except ValueError:
+            return {"success": False, "error": "Invalid visit date format. Please use YYYY-MM-DDTHH:MM:SS."}
+        query = query.filter(SiteVisit.visit_date == parsed_visit_date)
+
+    matches = query.order_by(SiteVisit.visit_date.asc(), SiteVisit.id.asc()).all()
+    if not matches:
+        return {"success": False, "error": "No scheduled site visit matching the provided details was found for this lead."}
+    if len(matches) > 1:
+        return {"success": False, "error": "Multiple scheduled site visits were found. Please specify the property or visit date and time.", "count": len(matches)}
+
+    site_visit, property_item = matches[0]
+    site_visit.status = "cancelled"
+    if notes and notes.strip():
+        cancellation_note = f"Cancellation: {notes.strip()}"
+        if site_visit.notes and site_visit.notes.strip():
+            site_visit.notes = f"{site_visit.notes.strip()} | {cancellation_note}"
+        else:
+            site_visit.notes = cancellation_note
+
+    update_lead_score(db=db, lead=lead)
+    db.commit(); db.refresh(site_visit); db.refresh(lead)
+
+    return {"success": True, "message": "Site visit cancelled successfully.",
+        "visit": {"id": site_visit.id, "lead_id": site_visit.lead_id,
+        "property_id": site_visit.property_id, "property_title": property_item.title,
+        "location": property_item.location, "property_type": property_item.property_type,
+        "price": property_item.price, "visit_date": site_visit.visit_date.isoformat(),
+        "status": site_visit.status, "notes": site_visit.notes},
+        "lead": {"id": lead.id, "pipeline_stage": lead.pipeline_stage,
+        "qualification_status": lead.qualification_status}}
 
 
 # ============================================================

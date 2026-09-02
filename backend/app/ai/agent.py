@@ -15,6 +15,7 @@ from app.ai.tools import (
     NEXT_BEST_ACTION_DECLARATION,
     SEARCH_PROPERTIES_DECLARATION,
     SCHEDULE_SITE_VISIT_DECLARATION,
+    CANCEL_SITE_VISIT_DECLARATION,
     CREATE_FOLLOW_UP_DECLARATION,
     GET_PENDING_FOLLOW_UPS_DECLARATION,
     get_lead,
@@ -22,6 +23,7 @@ from app.ai.tools import (
     next_best_action,
     search_properties,
     schedule_site_visit,
+    cancel_site_visit,
     create_follow_up,
     get_pending_follow_ups
 )
@@ -563,6 +565,36 @@ def execute_tool(
                     lead=lead
                 )
 
+
+        return result
+
+
+    # --------------------------------------------------------
+    # CANCEL SITE VISIT
+    # --------------------------------------------------------
+
+    if function_name == "cancel_site_visit":
+
+        result = cancel_site_visit(
+            db=db,
+            lead_id=lead_id,
+            property_title=arguments.get("property_title"),
+            visit_date=arguments.get("visit_date"),
+            notes=arguments.get("notes")
+        )
+
+        if result.get("success"):
+            lead = (
+                db.query(Lead)
+                .filter(Lead.id == lead_id)
+                .first()
+            )
+
+            if lead:
+                update_lead_score(
+                    db=db,
+                    lead=lead
+                )
 
         return result
 
