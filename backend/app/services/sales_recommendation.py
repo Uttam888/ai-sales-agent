@@ -310,6 +310,7 @@ def calculate_learned_action_score(
         if outcome in {
             "successful",
             "progressing",
+            "customer_interested",
         }:
             positive += 1
 
