@@ -114,8 +114,7 @@ def build_sales_history_context(
     # --------------------------------------------------------
 
     events.sort(
-        key=lambda event: event["date"]
-        or datetime.min,
+        key=lambda event: event["date"] or datetime.min,
         reverse=True
     )
 
@@ -207,12 +206,46 @@ def build_sales_history_context(
             "replacement visit is now scheduled."
         )
 
+    # --------------------------------------------------------
+    # SALES ACTION OUTCOMES
+    # --------------------------------------------------------
+    #
+    # This exposes the most recent AI sales action outcome
+    # to the frontend so that pending actions can be resolved
+    # through the "Record Outcome" UI.
+    #
+
+    latest_action_outcome = (
+        db.query(SalesActionOutcome)
+        .filter(
+            SalesActionOutcome.lead_id == lead.id
+        )
+        .order_by(
+            SalesActionOutcome.created_at.desc(),
+            SalesActionOutcome.id.desc()
+        )
+        .first()
+    )
+
+    latest_action_outcome_data = None
+
+    if latest_action_outcome:
+        latest_action_outcome_data = {
+            "id": latest_action_outcome.id,
+            "action": latest_action_outcome.action,
+            "execution_status": latest_action_outcome.execution_status,
+            "outcome": latest_action_outcome.outcome,
+            "notes": latest_action_outcome.notes,
+            "created_at": latest_action_outcome.created_at,
+            "updated_at": latest_action_outcome.updated_at
+        }
+
     return {
         "events": events,
         "insights": history_insights,
-        "event_count": len(events)
+        "event_count": len(events),
+        "latest_action_outcome": latest_action_outcome_data
     }
-
 
 
 # ============================================================
@@ -252,6 +285,7 @@ def calculate_learned_action_score(
     pending = 0
 
     for item in outcomes:
+
         outcome = str(
             item.outcome or ""
         ).strip().lower()
@@ -276,11 +310,13 @@ def calculate_learned_action_score(
     decided = positive + negative
 
     if decided == 0:
+
         positive_rate = 0.0
         learning_score = 0.0
         confidence = "NONE"
 
     else:
+
         positive_rate = (
             positive / decided
         ) * 100
@@ -289,10 +325,13 @@ def calculate_learned_action_score(
 
         if decided < 3:
             confidence = "LOW"
+
         elif decided < 6:
             confidence = "MEDIUM"
+
         elif decided < 10:
             confidence = "HIGH"
+
         else:
             confidence = "VERY_HIGH"
 
@@ -353,6 +392,7 @@ def calculate_adaptive_action_score(
     )
 
     if sample_size == 0:
+
         return {
             "base_score": round(
                 base_score,
@@ -370,10 +410,13 @@ def calculate_adaptive_action_score(
 
     if sample_size < 3:
         confidence_factor = 0.25
+
     elif sample_size < 6:
         confidence_factor = 0.50
+
     elif sample_size < 10:
         confidence_factor = 0.75
+
     else:
         confidence_factor = 1.00
 
@@ -458,7 +501,6 @@ def generate_sales_recommendation(
         lead=lead
     )
 
-
     # ========================================================
     # NEXT BEST ACTION
     # ========================================================
@@ -467,7 +509,6 @@ def generate_sales_recommendation(
         db=db,
         lead_id=lead.id
     )
-
 
     action = (
         action_result.get("action")
@@ -496,7 +537,6 @@ def generate_sales_recommendation(
         )
     )
 
-
     # ========================================================
     # NORMALIZE VALUES
     # ========================================================
@@ -506,36 +546,30 @@ def generate_sales_recommendation(
         or "NEW"
     ).strip().upper()
 
-
     intent = (
         lead.buying_intent
         or "unknown"
     ).strip().lower()
-
 
     health_status = (
         health.get("health")
         or "COLD"
     )
 
-
     priority = (
         health.get("priority")
         or "LOW"
     )
-
 
     score = (
         lead.lead_score
         or 0
     )
 
-
     risks = (
         health.get("risks")
         or []
     )
-
 
     recommended_focus = (
         health.get("recommended_focus")
@@ -561,8 +595,8 @@ def generate_sales_recommendation(
         reason = (
             reason
             + " The lead previously had a cancelled site "
-              "visit, but a replacement visit is now scheduled, "
-              "so the immediate focus is confirming the new visit."
+            "visit, but a replacement visit is now scheduled, "
+            "so the immediate focus is confirming the new visit."
         )
 
         recommended_focus = (
@@ -575,6 +609,7 @@ def generate_sales_recommendation(
     # --------------------------------------------------------
 
     if learned_action["sample_size"] > 0:
+
         learning_context = (
             f"Historical outcomes for '{action}' show a "
             f"{learned_action['positive_rate']:.1f}% positive rate "
@@ -582,12 +617,13 @@ def generate_sales_recommendation(
             f"outcome(s). Learning confidence is "
             f"{learned_action['confidence']}."
         )
+
     else:
+
         learning_context = (
             f"No decided historical outcomes are available "
             f"yet for '{action}'."
         )
-
 
     # ========================================================
     # RECOMMENDED ACTION
@@ -599,14 +635,12 @@ def generate_sales_recommendation(
             "Complete the overdue follow-up immediately."
         )
 
-
     elif action == "contact_and_reschedule_site_visit":
 
         recommended_action = (
             "Contact the customer and reschedule "
             "the missed site visit."
         )
-
 
     elif action == "reschedule_site_visit":
 
@@ -615,13 +649,11 @@ def generate_sales_recommendation(
             "a replacement site visit."
         )
 
-
     elif action == "prepare_for_site_visit":
 
         recommended_action = (
             "Confirm the scheduled site visit."
         )
-
 
     elif action == "follow_up_after_site_visit":
 
@@ -631,14 +663,12 @@ def generate_sales_recommendation(
             "remaining objections."
         )
 
-
     elif action == "schedule_site_visit":
 
         recommended_action = (
             "Convert the lead's property interest "
             "into a scheduled site visit."
         )
-
 
     elif action == "recommend_properties":
 
@@ -647,14 +677,12 @@ def generate_sales_recommendation(
             "on the customer's requirements."
         )
 
-
     elif action == "discuss_negotiation":
 
         recommended_action = (
             "Address objections and move the "
             "lead toward negotiation and closing."
         )
-
 
     elif action == "contact_high_intent_lead":
 
@@ -664,7 +692,6 @@ def generate_sales_recommendation(
             "or a site visit."
         )
 
-
     elif action == "qualify_lead":
 
         recommended_action = (
@@ -672,14 +699,12 @@ def generate_sales_recommendation(
             "and confirm the customer's requirements."
         )
 
-
     elif action == "contact_lead":
 
         recommended_action = (
             "Contact the lead and understand "
             "their requirements."
         )
-
 
     # --------------------------------------------------------
     # BACKWARD COMPATIBILITY
@@ -692,7 +717,6 @@ def generate_sales_recommendation(
             "sales conversation."
         )
 
-
     elif action == "negotiate":
 
         recommended_action = (
@@ -700,20 +724,17 @@ def generate_sales_recommendation(
             "lead toward negotiation."
         )
 
-
     elif action == "close":
 
         recommended_action = (
             "Move the lead toward conversion."
         )
 
-
     else:
 
         recommended_action = (
             recommended_focus
         )
-
 
     # ========================================================
     # URGENCY
@@ -725,13 +746,11 @@ def generate_sales_recommendation(
             "Act immediately."
         )
 
-
     elif priority == "HIGH":
 
         urgency = (
             "Act today."
         )
-
 
     elif priority == "MEDIUM":
 
@@ -739,13 +758,11 @@ def generate_sales_recommendation(
             "Follow up soon."
         )
 
-
     else:
 
         urgency = (
             "Continue normal lead nurturing."
         )
-
 
     # ========================================================
     # SUGGESTED MESSAGE
@@ -755,7 +772,6 @@ def generate_sales_recommendation(
         lead.name
         or "there"
     )
-
 
     # --------------------------------------------------------
     # OVERDUE FOLLOW-UP
@@ -770,7 +786,6 @@ def generate_sales_recommendation(
             "looking for a property and if there is "
             "anything I can help you with."
         )
-
 
     # --------------------------------------------------------
     # MISSED SITE VISIT
@@ -787,7 +802,6 @@ def generate_sales_recommendation(
             "more convenient time."
         )
 
-
     # --------------------------------------------------------
     # CANCELLED SITE VISIT
     # --------------------------------------------------------
@@ -801,7 +815,6 @@ def generate_sales_recommendation(
             "another convenient time for the visit?"
         )
 
-
     # --------------------------------------------------------
     # UPCOMING SITE VISIT
     # --------------------------------------------------------
@@ -812,9 +825,8 @@ def generate_sales_recommendation(
             f"Hi {lead_name}, just confirming your "
             "scheduled site visit. Please let me know "
             "if you need directions or any additional "
-            "property details before the visit."
+            "property details before your visit."
         )
-
 
     # --------------------------------------------------------
     # AFTER SITE VISIT
@@ -830,7 +842,6 @@ def generate_sales_recommendation(
             "the property."
         )
 
-
     # --------------------------------------------------------
     # SCHEDULE SITE VISIT
     # --------------------------------------------------------
@@ -842,7 +853,6 @@ def generate_sales_recommendation(
             "you would like to schedule a site visit "
             "for one of the properties we discussed."
         )
-
 
     # --------------------------------------------------------
     # RECOMMEND PROPERTIES
@@ -857,7 +867,6 @@ def generate_sales_recommendation(
             "like to review them."
         )
 
-
     # --------------------------------------------------------
     # NEGOTIATION
     # --------------------------------------------------------
@@ -870,7 +879,6 @@ def generate_sales_recommendation(
             "are any questions or concerns about the "
             "pricing or terms that I can help address."
         )
-
 
     # --------------------------------------------------------
     # HIGH INTENT
@@ -886,7 +894,6 @@ def generate_sales_recommendation(
             "preferences."
         )
 
-
     # --------------------------------------------------------
     # QUALIFICATION
     # --------------------------------------------------------
@@ -901,7 +908,6 @@ def generate_sales_recommendation(
             "budget, property type, and timeline."
         )
 
-
     # --------------------------------------------------------
     # GENERIC CONTACT
     # --------------------------------------------------------
@@ -913,7 +919,6 @@ def generate_sales_recommendation(
             "regarding your property requirements and "
             "see how I can help."
         )
-
 
     # ========================================================
     # BUILD RECOMMENDATION
@@ -962,6 +967,17 @@ def generate_sales_recommendation(
 
         "recommended_focus":
             recommended_focus,
+
+        # ----------------------------------------------------
+        # SALES HISTORY
+        # ----------------------------------------------------
+
+        "sales_history":
+            sales_history,
+
+        # ----------------------------------------------------
+        # HISTORICAL LEARNING
+        # ----------------------------------------------------
 
         "learning":
             learned_action,
