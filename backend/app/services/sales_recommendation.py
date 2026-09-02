@@ -493,6 +493,159 @@ def calculate_adaptive_action_score(
 
 
 # ============================================================
+# OUTCOME-AWARE NEXT ACTION
+# ============================================================
+
+def apply_action_outcome_to_next_action(
+    db: Session,
+    lead: Lead,
+    current_action: str,
+):
+    """
+    Use the latest decided sales-action outcome as an additional
+    signal for the next recommendation.
+
+    This layer is deliberately conservative:
+      - deterministic lead-state rules remain authoritative
+      - only a decided outcome can influence the next action
+      - pending outcomes are ignored
+      - the mapping only advances/re-directs actions when the
+        previous outcome gives a clear sales signal
+    """
+
+    latest_outcome = (
+        db.query(SalesActionOutcome)
+        .filter(
+            SalesActionOutcome.lead_id == lead.id,
+            SalesActionOutcome.outcome.isnot(None),
+            SalesActionOutcome.outcome.notin_([
+                "pending",
+            ]),
+        )
+        .order_by(
+            SalesActionOutcome.created_at.desc(),
+            SalesActionOutcome.id.desc(),
+        )
+        .first()
+    )
+
+    if not latest_outcome:
+        return {
+            "action": current_action,
+            "applied": False,
+            "reason": None,
+            "source_outcome": None,
+        }
+
+    outcome = str(
+        latest_outcome.outcome or ""
+    ).strip().lower()
+
+    if outcome in {"pending", ""}:
+        return {
+            "action": current_action,
+            "applied": False,
+            "reason": None,
+            "source_outcome": latest_outcome.outcome,
+        }
+
+    previous_action = str(
+        latest_outcome.action or ""
+    ).strip().lower()
+
+    # Do not let an older action outcome override a newer
+    # deterministic lead-state decision.
+    #
+    # Outcome-aware progression is applied only when the
+    # decided outcome belongs to the action that the
+    # deterministic engine currently recommends.
+    if previous_action != str(current_action or "").strip().lower():
+        return {
+            "action": current_action,
+            "applied": False,
+            "reason": None,
+            "source_outcome": latest_outcome.outcome,
+        }
+
+    # Positive customer response:
+    # move a generic contact/qualification interaction toward
+    # property selection rather than repeatedly contacting.
+    if outcome in {
+        "customer_interested",
+        "interested",
+        "progressing",
+    }:
+        positive_progression = {
+            "contact_lead": "recommend_properties",
+            "contact_high_intent_lead": "recommend_properties",
+            "qualify_lead": "recommend_properties",
+            "recommend_properties": "schedule_site_visit",
+            "schedule_site_visit": "prepare_for_site_visit",
+        }
+
+        learned_next_action = positive_progression.get(
+            previous_action
+        )
+
+        if learned_next_action:
+            return {
+                "action": learned_next_action,
+                "applied": True,
+                "reason": (
+                    f"The previous '{previous_action}' action "
+                    f"received a positive '{latest_outcome.outcome}' "
+                    "outcome, so the next step advances the sales journey."
+                ),
+                "source_outcome": latest_outcome.outcome,
+            }
+
+    # Successful/completed actions should normally move toward
+    # the next stage, but only for actions where the transition
+    # is unambiguous.
+    if outcome in {
+        "successful",
+        "completed",
+    }:
+        successful_progression = {
+            "contact_lead": "qualify_lead",
+            "contact_high_intent_lead": "recommend_properties",
+            "qualify_lead": "recommend_properties",
+            "recommend_properties": "schedule_site_visit",
+            "schedule_site_visit": "prepare_for_site_visit",
+            "prepare_for_site_visit": "follow_up_after_site_visit",
+            "follow_up_after_site_visit": "discuss_negotiation",
+            "discuss_negotiation": "close",
+        }
+
+        learned_next_action = successful_progression.get(
+            previous_action
+        )
+
+        if learned_next_action:
+            return {
+                "action": learned_next_action,
+                "applied": True,
+                "reason": (
+                    f"The previous '{previous_action}' action "
+                    f"was marked '{latest_outcome.outcome}', "
+                    "so the next recommendation advances to the "
+                    "next appropriate sales step."
+                ),
+                "source_outcome": latest_outcome.outcome,
+            }
+
+    # Negative/no-response outcomes should not blindly force a
+    # new action. Existing lead-health and next-best-action rules
+    # remain responsible for deciding the corrective action.
+    return {
+        "action": current_action,
+        "applied": False,
+        "reason": None,
+        "source_outcome": latest_outcome.outcome,
+    }
+
+
+# ============================================================
 # AI SALES RECOMMENDATION
 # ============================================================
 
@@ -532,6 +685,22 @@ def generate_sales_recommendation(
         action_result.get("action")
         or "review_lead"
     )
+
+    # ========================================================
+    # OUTCOME-AWARE NEXT ACTION
+    # ========================================================
+
+    outcome_action = apply_action_outcome_to_next_action(
+        db=db,
+        lead=lead,
+        current_action=action,
+    )
+
+    if outcome_action.get("applied"):
+        action = (
+            outcome_action.get("action")
+            or action
+        )
 
     # ========================================================
     # HISTORICAL ACTION LEARNING
