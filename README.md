@@ -2,6 +2,10 @@
 
 An AI-powered real-estate sales intelligence and CRM platform built with React, FastAPI, PostgreSQL, and Google Gemini.
 
+## Architecture
+
+![AI Sales Agent Architecture](docs/architecture.png)
+
 The system helps sales teams manage leads, understand customer intent, recommend sales actions, manage follow-ups and site visits, and learn from real-world sales outcomes.
 
 ---
